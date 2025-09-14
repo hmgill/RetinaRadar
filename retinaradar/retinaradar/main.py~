@@ -1,0 +1,42 @@
+"""
+Retina Radar 
+
+required args:
+   --config : path to the Retina Radar config file
+"""
+from loguru import logger
+
+from retinaradar.log import initialize_log
+from retinaradar.config import ConfigReader
+from retinaradar.cleanup import cleanup_id, cleanup_all
+
+# Future imports from subdirectories would look like:
+# from retinaradar.core.training.train import TrainDeepLab
+
+
+def main(args):
+
+    """
+    
+    """
+
+    # remove all runs
+    if args.cleanup_run_all:
+        cleanup_all()
+
+    # remove run by id 
+    elif args.cleanup_run_id is not None:
+        cleanup_id(args.cleanup_run_id)
+
+    else:
+        
+        # Initialize log file
+        initialize_log()
+    
+        # Read config file 
+        config = ConfigReader().read_config(args.config)
+
+        # fit TL model 
+        if config.mode.fit:
+            print("fitting TL")
+        

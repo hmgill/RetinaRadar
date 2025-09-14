@@ -1,0 +1,245 @@
+import pydantic
+from pathlib import Path 
+from numpydantic import NDArray
+from enum import Enum 
+from datetime import datetime
+from typing import Literal, Optional, Union
+
+
+class Image(pydantic.BaseModel):
+
+    """
+    Pydantic Data Class for Storing Image Information. 
+    
+    parameters: 
+      path : absolute path to the image file
+      name : image file name 
+      extension : image file extension 
+      original_shape : original dimensions for the image file (h,w,c)
+      target_shape : dimensions to reshape image to (h,w,c)
+      base64_string : base64 string encoding image data
+      file_size_bytes : file size (in bytes) 
+    """
+    
+    path : Optional[Path] = pydantic.Field(
+        default = None,
+        frozen = True,
+        description = "absolute path to image file"
+    )
+    name : Optional[str] = pydantic.Field(
+        default = None,
+        description = "image filename (without path)"
+    )
+    extension : Optional[str] = pydantic.Field(
+        default = None,
+        pattern=r'^\.[a-zA-Z0-9]+$',  # Must start with dot
+        description="image file extension, including dot (e.g., '.jpg')"
+    )    
+    original_shape : Optional[tuple[int, int, int]] = pydantic.Field(
+        default = None,
+        description = "original image shape in (h,w,c) format"
+    )
+    target_shape : Optional[tuple[int, int, int]] = pydantic.Field(
+        default = None,
+        description = "target dimensions to reshape to in (h,w,c) format"
+    )
+    base64_string : str | None = pydantic.Field(
+        default = None,
+        description = "Base64 encoded image data"
+    )
+    file_size_bytes: Optional[int] = pydantic.Field(
+        default=None,
+        ge=0,
+        description="File size in bytes"
+    )    
+
+    @pydantic.field_validator('original_shape', 'target_shape')
+    @classmethod
+    def validate_shape(cls, v):
+        if v is not None and len(v) != 3:
+            raise ValueError("Shape must be a 3-tuple (height, width, channels)")
+        if v is not None and any(dim <= 0 for dim in v):
+            raise ValueError("All dimensions must be positive")
+        return v
+    
+
+
+       
+class Quality(pydantic.BaseModel):
+
+    """
+    Pydantic Data Class for Storing Image Quality Information
+
+    parameters:
+       artifacts : image contains artifacts [0 = yes, 1 = no]
+       focus : image is sharp and focuses [0 = no, 1 = yes]
+       illumination : image lighting and illumination sufficient [0 = no, 1 = yes]
+       contrast : image contrast sufficient [0 = no, 1 = yes]
+       field : image field-of-view and centering sufficient [0 = no, 1 = yes]
+       usable : image quality is overall sufficient [0 = no, 1 = yes]
+    """
+    
+    artifacts : Optional[bool] = pydantic.Field(
+        default = None,
+        description = "image contains artifacts [0 = yes, 1 = no]"
+    )
+    clarity : Optional[bool] = pydantic.Field(
+        default = None,
+        description = "image is sharp and focused [0 = no, 1 = yes]"
+    )
+    illumination : Optional[bool] = pydantic.Field(
+        default = None,
+        description = "image lighting and illumination sufficient [0 = no, 1 = yes]"
+    )
+    contrast : Optional[bool] = pydantic.Field(
+        default = None,
+        description = "image contrast sufficient [0 = no, 1 = yes]"
+    )
+    field : Optional[bool] = pydantic.Field(
+        default = None,
+        description = "image field-of-view and centering sufficient [0 = no, 1 = yes]"
+    )
+    usable : Optional[bool] = pydantic.Field(
+        default = None,
+        description = "image quality is overall sufficient [0 = no, 1 = yes]"
+    )
+
+
+
+
+    
+class Laterality(pydantic.BaseModel):
+
+    """
+    Store Eye Laterality [left | right] Information
+
+    parameters : 
+       laterality : [left | right] left or right eye? 
+    """
+    
+    laterality : Optional[str] = pydantic.Field(
+        default = None,
+        description = "[left | right] left or right eye?"
+    )
+
+
+
+    
+class Labels(pydantic.BaseModel):
+
+    """
+    Pydantic Data Class for Storing Datapoint Label Information
+
+    parameters :
+       laterality : [Laterality | None] describes image laterality (left / OS or right / OD)
+       quality : [Quality | None] describes image quality in terms of illumination, image_field, artifacts, and focus
+       image_type : [str | None] describes image type [standard FOV | widefield | ultrawidefield]
+    """
+
+    laterality : Optional[Laterality] = pydantic.Field(
+        default = None,
+        description = "describes left | right side, inverted status"
+    )
+    quality : Optional[Quality] = pydantic.Field(
+        default = None,
+        description = "describes image quality in terms of illumination, image_field, artifacts, and focus"
+    )
+    image_type : Optional[str] = pydantic.Field(
+        default = None,
+        description = "type of fundus image [standard FOV | widefield | ultrawidefield]"
+    )
+
+
+    
+    
+class Datapoint(pydantic.BaseModel):
+
+    """
+    Pydantic Data Class for All Information for Single Datapoint 
+
+    parameters: 
+       uuid : a unique id for the datapoint
+       source : the dataset the datapoint belongs to 
+       image : the Image data object
+       labels : the Labels data object  
+    """
+
+    uuid : Optional[str] = pydantic.Field(
+        frozen = True,
+        description = "unique id for the datapoint"
+    )
+    source : Optional[str] = pydantic.Field(
+        default = None,
+        description = "the dataset the datapoint belongs to"
+    )
+    image : Optional[Image] = pydantic.Field(
+        default = None,
+        description = "Image data and metadata"
+    )
+    labels : Optional[Labels] = pydantic.Field(
+        default = None,
+        description = "Labels for the image"
+    )
+    
+    @pydantic.model_validator(mode='after')
+    def validate_datapoint(self):
+        """Ensure datapoint has minimum required information"""
+        if self.uuid is None and self.image is None:
+            raise ValueError("Datapoint must have either uuid or image information")
+        return self    
+    
+
+    
+class DatasetRole(str, Enum):
+    """Enumeration for dataset roles"""
+    TRAINING = "training"
+    VALIDATION = "validation"
+    TEST = "test"
+    BENCHMARK = "benchmark"
+    PREDICTION = "prediction"
+
+
+    
+class Dataset(pydantic.BaseModel):
+
+    """
+    Pydantic Data Class for Storing a Group of Related Datapoints
+
+    parameters: 
+       name : unique dataset name  
+       role : what role the dataset serves [training | validation | test | benchmark | prediction]
+       datapoints : the Datapoint objects
+    """
+
+    name: Optional[str] = pydantic.Field(
+        default=None,
+        description="unique dataset name"
+    )
+    role : DatasetRole = pydantic.Field(
+        default=DatasetRole.TRAINING,
+        description="[training | validation | test | benchmark | prediction]"
+    )
+    datapoints :  NDArray | list[Datapoint] | None = pydantic.Field(
+        default = []
+    )
+    created_date : Optional[datetime] = pydantic.Field(
+        default = None,
+        description = "Dataset creation time"
+    )
+
+    @pydantic.computed_field
+    @property
+    def total_count(self) -> int:
+        """Total number of datapoints in the dataset"""
+        return len(self.datapoints)
+    
+    def add_datapoint(self, datapoint: Datapoint) -> None:
+        """Add a datapoint to the dataset"""
+        self.datapoints.append(datapoint)
+    
+    def get_by_uuid(self, uuid: str) -> Optional[Datapoint]:
+        """Retrieve datapoint by UUID"""
+        for dp in self.datapoints:
+            if dp.uuid == uuid:
+                return dp
+        return None    

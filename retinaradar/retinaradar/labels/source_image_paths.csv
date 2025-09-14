@@ -1,0 +1,6 @@
+﻿source,path_to_images
+brset,/N/project/retinal_images/datasets/physionet.org/content/brazilian-ophthalmological/get-zip/1.0.1/a-brazilian-multilabel-ophthalmological-dataset-brset-1.0.1/fundus_photos/
+fives,/N/project/retinal_images/datasets/fives/train/Original/
+iuh,/N/project/retinal_images/datasets/iuh/widefield/
+mshf,/N/project/retinal_images/datasets/mshf/MSHF dataset 2.0/Original/combined/
+uwf_iqa,/N/project/retinal_images/datasets/ultrawide_image_quality_assessment/Original UWF Image/combined/

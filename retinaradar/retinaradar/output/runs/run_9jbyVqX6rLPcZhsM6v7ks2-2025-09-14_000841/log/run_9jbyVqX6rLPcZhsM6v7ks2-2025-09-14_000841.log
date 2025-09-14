@@ -1,0 +1,7 @@
+2025-09-14 00:08:47 | INFO | config file loaded from: retinaradar.config
+2025-09-14 00:08:47 | INFO | config file contents:
+{
+  "mode": {
+    "fit_or_finetune": "True"
+  }
+}
