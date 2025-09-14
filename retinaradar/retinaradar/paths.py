@@ -38,7 +38,9 @@ dynamic_paths = {
     "results" : Path(run_output, "results"),
     "log" : Path(run_output, "log"),
 }
-loguru_path = {
+
+extra_info = {
+    "run_id" : run_id,
     "loguru" : Path(run_output, "log", f"{run_id}.log")
 }
 
@@ -55,4 +57,4 @@ make_dynamic_paths()
 """
 PATHS constant 
 """
-PATHS = constant_paths | dynamic_paths | loguru_path 
+PATHS = constant_paths | dynamic_paths | extra_info 

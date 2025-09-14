@@ -1,0 +1,52 @@
+
+"""
+
+
+"""
+import mlflow 
+from pytorch_lightning.loggers import MLFlowLogger
+
+
+from retinaradar.core.io import IO
+from retinaradar.paths import PATHS
+
+
+class FitTL:
+
+
+    def __init__(self, config):
+        self.config = config
+
+        self.io = IO(config)
+
+        
+
+
+    def run(self):
+
+        """
+        CONFIGURE EXPERIMENT TRACKING 
+        """
+        
+        run_id = PATHS["run_id"]
+        
+        EXPERIMENT_NAME = f"Fit Transfer Learning Model | {run_id}"
+        mlflow.set_experiment(EXPERIMENT_NAME)
+        mlflow_logger = MLFlowLogger(experiment_name = EXPERIMENT_NAME)
+
+        with mlflow.start_run(run_id = run_id) as run:
+
+            """
+
+            """
+            
+            print("starting run")
+        
+
+    
+        
+        
+        # read in dataset 
+        #dataset = self.io.read_dataset()
+
+        

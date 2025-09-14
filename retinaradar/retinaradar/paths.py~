@@ -34,6 +34,7 @@ run_id = f"run_{run_uuid}-{run_timestamp}"
 
 run_output = Path(retinaradar_runs, run_id)
 dynamic_paths = {
+    "run_id" : run_id,
     "output" : run_output,
     "results" : Path(run_output, "results"),
     "log" : Path(run_output, "log"),
@@ -46,7 +47,6 @@ loguru_path = {
 # Create directories when module is imported
 def make_dynamic_paths():
     for path in dynamic_paths.values():
-        print(path)
         path.mkdir(parents=True, exist_ok=True)
 
 make_dynamic_paths()

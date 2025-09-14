@@ -70,6 +70,7 @@ class IO:
             create datapoint image object
             """
             path = d["image_path"]
+            print(d.items())
             extension = path.suffix
             name = path.stem
             this_image, size_in_bytes = self.read_image(path, get_size_in_bytes = True)
@@ -214,3 +215,5 @@ class IO:
         return dataset 
         
         
+
+    

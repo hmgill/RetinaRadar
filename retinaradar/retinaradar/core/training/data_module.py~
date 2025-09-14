@@ -1,0 +1,82 @@
+import torch
+import pytorch_lightning as pl
+from torch.utils.data import DataLoader, random_split
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+
+
+from retinaradar.core.training.handler_dataset import HandlerDataset
+
+
+
+
+class RetinaRadarDataModule(pl.LightningDataModule):
+
+    def __init__(
+            self,
+            config,
+            retina_radar_dataset
+    ):
+        super().__init__()
+        self.config = config
+        self.retina_radar_dataset = retina_radar_dataset
+
+        self.train_ratio = config["tl"]["fit"]["ratio"]["train"]
+        self.val_ratio = config["tl"]["fit"]["ratio"]["val"]
+        self.batch_size = config["tl"]["fit"]["hyperparameters"]["batch_size"]
+        self.seed = config["tl"]["fit"]["hyperparameters"]["seed"]
+
+        # Define the standard imagenet mean and std
+        IMAGENET_MEAN = [0.485, 0.456, 0.406]
+        IMAGENET_STD = [0.229, 0.224, 0.225]
+
+        # Define Albumentations training transforms
+        self.train_transform = A.Compose([
+            A.RandomResizedCrop(height=224, width=224),
+            A.HorizontalFlip(p=0.5),
+            A.ColorJitter(p=0.5),
+            A.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+            ToTensorV2(),
+        ])
+        
+        # Define Albumentations validation/test transforms
+        self.val_test_transform = A.Compose([
+            A.Resize(256, 256),
+            A.CenterCrop(224, 224),
+            A.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+            ToTensorV2(),
+        ])
+
+        
+    def setup(self, stage: str):
+        # Create instance of dataset
+        handler_dataset = HandlerDataset(self.retina_radar_dataset, transform=None)
+        
+        # Calculate split sizes
+        total_size = len(handler_dataset)
+        train_size = int(total_size * self.train_ratio)
+        val_size = int(total_size * self.val_ratio)
+        test_size = total_size - train_size - val_size
+
+        # split the dataset 
+        generator = torch.Generator().manual_seed(self.seed)
+        self.train_split, self.val_split, self.test_split = random_split(
+            handler_dataset,
+            [train_size, val_size, test_size],
+            generator=generator
+        )
+
+        
+    def train_dataloader(self):
+        self.train_split.dataset.transform = self.train_transform
+        return DataLoader(self.train_split, batch_size=self.batch_size, shuffle=True)
+
+    
+    def val_dataloader(self):
+        self.val_split.dataset.transform = self.val_test_transform
+        return DataLoader(self.val_split, batch_size=self.batch_size)
+
+    
+    def test_dataloader(self):
+        self.test_split.dataset.transform = self.val_test_transform
+        return DataLoader(self.test_split, batch_size=self.batch_size)

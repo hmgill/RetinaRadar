@@ -6,9 +6,14 @@ required args:
 """
 from loguru import logger
 
+
+
+
 from retinaradar.log import initialize_log
 from retinaradar.config import ConfigReader
 from retinaradar.cleanup import cleanup_id, cleanup_all
+
+from retinaradar.core.training.fit_tl import FitTL 
 
 # Future imports from subdirectories would look like:
 # from retinaradar.core.training.train import TrainDeepLab
@@ -38,5 +43,6 @@ def main(args):
 
         # fit TL model 
         if config["mode"]["fit"]:
-            print("fitting TL")
+            print("fitting tl")
+            FitTL(config).run()
         

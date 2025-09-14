@@ -362,22 +362,7 @@ class RetinaRadarDataset(pydantic.BaseModel):
             # Look up the pre-computed array and assign it to the field
             if dp.uuid in all_encodings:
                 dp.onehot_encoded_array = all_encodings[dp.uuid]
-
-
-    @pydantic.computed_field
-    @property
-    def num_labels(self) -> int:
-        """
-        The total number of distinct label columns after one-hot encoding.
-        This is the required output size for the model's final layer.
-        """
-        encoder = self.onehot_encoder
-        if encoder is None:
-            return 0
-        
-        # The total number of labels is the total number of columns in the one-hot encoded array
-        return len(encoder.get_feature_names_out())
-                
+    
     def add_datapoint(self, datapoint: Datapoint) -> None:
         """Add a datapoint to the dataset"""
         self.datapoints.append(datapoint)
