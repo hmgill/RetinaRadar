@@ -1,4 +1,5 @@
 import pydantic
+import random 
 from pathlib import Path
 from numpydantic import NDArray
 from enum import Enum
@@ -330,22 +331,51 @@ class RetinaRadarDataset(pydantic.BaseModel):
             
         return encoded_data
 
-    @pydantic.computed_field
-    @property
-    def onehot_to_original_mapping(self) -> Dict[str, Any]:
-        """Get a dictionary mapping feature names to their possible categorical values."""
+    def decode_onehot_to_original(self, onehot_array: NDArray) -> Dict[str, Any]:
+        """
+        Decode a one-hot encoded array back to its original label values as a dictionary.
+        
+        Args:
+            onehot_array: A one-hot encoded array (e.g., from multilabel_onehot_encoding)
+        
+        Returns:
+            A dictionary mapping label category names to their original values:
+            {
+                'laterality': 'left',
+                'fundus_image_type': 'standard',
+                'artifacts': True,
+                'clarity': False,
+                'illumination': True,
+                'contrast': True,
+                'field': False,
+                'usable': True
+            }
+        
+        Example:
+            >>> onehot_array = dataset.multilabel_onehot_encoding[datapoint.uuid]
+            >>> original_values = dataset.decode_onehot_to_original(onehot_array)
+            >>> print(original_values['laterality'])  # 'left'
+        """
         encoder = self.onehot_encoder
         if encoder is None:
-            return {}
-
+            raise ValueError("OneHotEncoder is not available. Dataset may be empty.")
+        
+        # Reshape to 2D array as required by inverse_transform
+        if onehot_array.ndim == 1:
+            onehot_array = onehot_array.reshape(1, -1)
+        
+        # Use the encoder's inverse_transform to get back original values
+        decoded = encoder.inverse_transform(onehot_array)
+        
+        # Get the feature names in order
         feature_names = ['laterality', 'fundus_image_type'] + list(Quality.model_fields.keys())
         
-        mapping = {}
-        for i, feature in enumerate(feature_names):
-            mapping[feature] = [cat for cat in encoder.categories_[i] if cat is not None]
+        # Create dictionary mapping feature names to decoded values
+        result = {}
+        for i, feature_name in enumerate(feature_names):
+            result[feature_name] = decoded[0][i]
         
-        return mapping
-
+        return result
     
     def compute_and_store_onehot_encodings(self) -> None:
         """
@@ -388,3 +418,166 @@ class RetinaRadarDataset(pydantic.BaseModel):
             if dp.uuid == uuid:
                 return dp
         return None
+    
+    def get_metadata_for_inference(self) -> Dict[str, Any]:
+        """
+        Generate metadata dictionary needed for inference and decoding predictions.
+        This should be saved alongside the model for later use.
+        
+        Returns:
+            Dict containing:
+                - num_labels: total number of output labels
+                - feature_names: list of feature names in order
+                - label_categories: original sklearn encoder categories
+        """
+        encoder = self.onehot_encoder
+        if encoder is None:
+            return {}
+        
+        feature_names = ['laterality', 'fundus_image_type'] + list(Quality.model_fields.keys())
+        
+        metadata = {
+            'num_labels': self.num_labels,
+            'feature_names': feature_names,
+            'onehot_feature_names': encoder.get_feature_names_out().tolist(),
+            'label_categories': [cat.tolist() for cat in encoder.categories_]
+        }
+        
+        return metadata
+
+
+    def shuffle(self, seed: Optional[int] = None, inplace: bool = True) -> Optional['RetinaRadarDataset']:
+        """
+        Shuffle the datapoints in the dataset.
+
+        Args:
+            seed: Random seed for reproducible shuffling. If None, uses current random state.
+            inplace: If True, modifies the current dataset. If False, returns a new shuffled dataset.
+
+        Returns:
+            None if inplace=True, otherwise returns a new shuffled RetinaRadarDataset
+
+        Examples:
+            # Shuffle in-place with reproducible seed
+            dataset.shuffle(seed=42)
+
+            # Create a new shuffled dataset
+            shuffled_dataset = dataset.shuffle(seed=42, inplace=False)
+
+            # Shuffle in-place with random seed
+            dataset.shuffle()
+        """
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
+        if inplace:
+            # Shuffle the datapoints list in-place
+            random.shuffle(self.datapoints)
+            return None
+        else:
+            # Create a new dataset with shuffled datapoints
+            shuffled_datapoints = self.datapoints.copy()
+            random.shuffle(shuffled_datapoints)
+
+            return RetinaRadarDataset(
+                name=self.name,
+                role=self.role,
+                datapoints=shuffled_datapoints,
+                created_date=self.created_date
+            )
+
+    def shuffle_stratified(self, stratify_by: str = "source", seed: Optional[int] = None, inplace: bool = True) -> Optional['RetinaRadarDataset']:
+        """
+        Perform stratified shuffling to maintain proportional representation of categories.
+
+        Args:
+            stratify_by: Field to stratify by ('source', 'laterality', or 'fundus_image_type')
+            seed: Random seed for reproducible shuffling
+            inplace: If True, modifies the current dataset. If False, returns a new shuffled dataset
+
+        Returns:
+            None if inplace=True, otherwise returns a new shuffled RetinaRadarDataset
+        """
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+        # Group datapoints by the stratification field
+        groups = {}
+        for dp in self.datapoints:
+            if stratify_by == "source":
+                key = dp.source or "unknown"
+            elif stratify_by == "laterality":
+                key = dp.labels.laterality.left_or_right if dp.labels and dp.labels.laterality else "unknown"
+            elif stratify_by == "fundus_image_type":
+                key = (dp.labels.fundus_image_type.standard_widefield_ultrawidefield
+                      if dp.labels and dp.labels.fundus_image_type else "unknown")
+            else:
+                raise ValueError(f"Invalid stratify_by value: {stratify_by}")
+
+            if key not in groups:
+                groups[key] = []
+            groups[key].append(dp)
+
+        # Shuffle within each group
+        for group_datapoints in groups.values():
+            random.shuffle(group_datapoints)
+
+        # Interleave the groups to maintain proportional representation
+        shuffled_datapoints = []
+        group_iterators = {key: iter(datapoints) for key, datapoints in groups.items()}
+
+        while group_iterators:
+            # Randomly select a group that still has datapoints
+            available_groups = list(group_iterators.keys())
+            selected_group = random.choice(available_groups)
+
+            try:
+                datapoint = next(group_iterators[selected_group])
+                shuffled_datapoints.append(datapoint)
+            except StopIteration:
+                # This group is exhausted, remove it
+                del group_iterators[selected_group]
+
+        if inplace:
+            self.datapoints = shuffled_datapoints
+            return None
+        else:
+            return RetinaRadarDataset(
+                name=self.name,
+                role=self.role,
+                datapoints=shuffled_datapoints,
+                created_date=self.created_date
+            )
+
+
+    def get_shuffle_info(self) -> Dict[str, Any]:
+        """
+        Get information about the dataset composition for shuffle analysis.
+
+        Returns:
+            Dictionary with counts by various categories
+        """
+        info = {
+            "total_datapoints": len(self.datapoints),
+            "sources": {},
+            "laterality": {},
+            "fundus_image_types": {}
+        }
+
+        for dp in self.datapoints:
+            # Count by source
+            source = dp.source or "unknown"
+            info["sources"][source] = info["sources"].get(source, 0) + 1
+
+            # Count by laterality
+            laterality = (dp.labels.laterality.left_or_right
+                         if dp.labels and dp.labels.laterality else "unknown")
+            info["laterality"][laterality] = info["laterality"].get(laterality, 0) + 1
+
+            # Count by fundus image type
+            fundus_type = (dp.labels.fundus_image_type.standard_widefield_ultrawidefield
+                          if dp.labels and dp.labels.fundus_image_type else "unknown")
+            info["fundus_image_types"][fundus_type] = info["fundus_image_types"].get(fundus_type, 0) + 1
+
+        return info
