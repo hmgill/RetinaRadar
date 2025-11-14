@@ -1,8 +1,0 @@
-[mode]
-fit = True
-
-[dataset]
-image_paths_dataframe = ""
-image_labels_dataframe = "/N/project/retinal_images/scripts/retinaradar/retinaradar/labels/merged_labels.csv"
-
-
